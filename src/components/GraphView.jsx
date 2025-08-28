@@ -14,12 +14,22 @@ const GraphView = ({ userCompletedSkills = [] }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Ensure all IDs are strings
+  const stringCompletedSkills = userCompletedSkills.map(id => id.toString());
+
   // Fetch all skills from the backend
   const fetchSkills = async () => {
     try {
       const response = await axios.get('http://127.0.0.1:5000/skills/');
       if (response.data.success) {
-        setSkills(response.data.skills);
+        // Ensure all skill IDs are strings
+        const skillsWithStringIds = response.data.skills.map(skill => ({
+          ...skill,
+          id: skill.id.toString(),
+          prerequisites: skill.prerequisites.map(prereq => prereq.toString())
+        }));
+        setSkills(skillsWithStringIds);
+        console.log("Fetched skills:", skillsWithStringIds);
       } else {
         throw new Error('Failed to fetch skills');
       }
@@ -33,10 +43,16 @@ const GraphView = ({ userCompletedSkills = [] }) => {
   const fetchUnlockableSkills = async () => {
     try {
       const response = await axios.post('http://127.0.0.1:5000/skills/unlockable', {
-        completed_skills: userCompletedSkills
+        completed_skills: stringCompletedSkills
       });
       if (response.data.success) {
-        setUnlockableSkills(response.data.unlockable);
+        // Ensure all unlockable skill IDs are strings
+        const unlockableWithStringIds = response.data.unlockable.map(skill => ({
+          ...skill,
+          id: skill.id.toString()
+        }));
+        setUnlockableSkills(unlockableWithStringIds);
+        console.log("Fetched unlockable skills:", unlockableWithStringIds);
       } else {
         throw new Error('Failed to fetch unlockable skills');
       }
@@ -46,9 +62,22 @@ const GraphView = ({ userCompletedSkills = [] }) => {
     }
   };
 
+  // Debug logging
+  useEffect(() => {
+    if (skills.length === 0) return;
+    console.log("=== DEBUG INFO ===");
+    console.log("Skills:", skills);
+    console.log("Unlockable:", unlockableSkills);
+    console.log("User completed (original):", userCompletedSkills);
+    console.log("User completed (strings):", stringCompletedSkills);
+    console.log("Container dimensions:", containerRef.current?.offsetWidth, "x", containerRef.current?.offsetHeight);
+  }, [skills, unlockableSkills, stringCompletedSkills]);
+
   // Initialize the graph when skills data changes
   useEffect(() => {
     if (skills.length === 0) return;
+
+    console.log("Initializing Cytoscape with", skills.length, "skills");
 
     // Create nodes and edges for Cytoscape
     const nodes = skills.map(skill => ({
@@ -73,6 +102,9 @@ const GraphView = ({ userCompletedSkills = [] }) => {
       });
     });
 
+    console.log("Created nodes:", nodes);
+    console.log("Created edges:", edges);
+
     // Initialize Cytoscape
     if (cyRef.current) {
       cyRef.current.destroy();
@@ -90,7 +122,7 @@ const GraphView = ({ userCompletedSkills = [] }) => {
           style: {
             'background-color': (ele) => {
               const nodeId = ele.id();
-              if (userCompletedSkills.includes(nodeId)) {
+              if (stringCompletedSkills.includes(nodeId)) {
                 return '#10B981'; // Green for completed skills
               } else if (unlockableSkills.some(skill => skill.id === nodeId)) {
                 return '#F59E0B'; // Amber for unlockable skills
@@ -134,6 +166,8 @@ const GraphView = ({ userCompletedSkills = [] }) => {
       }
     });
 
+    console.log("Cytoscape initialized with", cyRef.current.nodes().length, "nodes");
+
     // Add click event handler
     cyRef.current.on('tap', 'node', (evt) => {
       const node = evt.target;
@@ -168,7 +202,7 @@ const GraphView = ({ userCompletedSkills = [] }) => {
     });
 
     setLoading(false);
-  }, [skills, unlockableSkills, userCompletedSkills]);
+  }, [skills, unlockableSkills, stringCompletedSkills]);
 
   // Fetch data on component mount
   useEffect(() => {
@@ -180,7 +214,7 @@ const GraphView = ({ userCompletedSkills = [] }) => {
     if (skills.length > 0) {
       fetchUnlockableSkills();
     }
-  }, [userCompletedSkills, skills]);
+  }, [stringCompletedSkills, skills]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -264,17 +298,18 @@ const GraphView = ({ userCompletedSkills = [] }) => {
         ref={containerRef} 
         style={{ 
           width: '100%', 
-          height: '384px', 
+          height: '400px', 
           border: '1px solid #d1d5db', 
           borderRadius: '8px', 
           backgroundColor: 'white',
-          minHeight: '400px' 
+          minHeight: '400px'
         }}
       />
       
       <div style={{ marginTop: '16px', fontSize: '14px', color: '#6b7280' }}>
         <p>💡 Click on any skill node to see its details and prerequisites</p>
         <p>🔄 The graph updates automatically based on your completed skills</p>
+        <p>🐛 Check browser console for debug information</p>
       </div>
     </div>
   );
